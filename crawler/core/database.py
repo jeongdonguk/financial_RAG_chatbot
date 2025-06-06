@@ -3,7 +3,8 @@ from sqlalchemy.orm import declarative_base
 from core.config import Settings
 
 # 비동기 엔진 생성 (oracle+asyncpg 사용)
-async_database_url = Settings.DATABASE_URL.replace("oracle://", "oracle+asyncpg://")
+settings = Settings()
+async_database_url = settings.DATABASE_URL.replace("oracle://", "oracle+asyncpg://")
 engine = create_async_engine(async_database_url, pool_pre_ping=True, echo=False)
 
 # 비동기 세션 팩토리
