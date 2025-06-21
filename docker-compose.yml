@@ -1,0 +1,55 @@
+version: "3.8"
+
+services:
+
+
+  crawler:
+    labels: [service=crawler]
+    build: ./crawler
+    container_name: crawler
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./crawler:/app  # 소스 코드 실시간 반영
+    environment:
+      - TZ=Asia/Seoul
+    depends_on:
+      - oracle
+
+
+  # MongoDB - 문서 저장소
+  mongodb:
+    image: mongodb/mongodb-community-server:7.0-ubi9
+    container_name: fund_mongodb
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: admin
+      MONGO_INITDB_ROOT_PASSWORD: password123
+      MONGO_INITDB_DATABASE: fund_rag
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb_data:/data/db
+      - ./config/mongo-init.js:/docker-entrypoint-initdb.d/mongo-init.js:ro
+
+
+  oracle:
+    image: gvenzl/oracle-free:23-slim-faststart
+    platform: linux/arm64  
+    container_name: oracle
+    environment:
+      # 기본 관리자 패스워드
+      ORACLE_PASSWORD: root
+      # 애플리케이션 전용 계정 만들고 싶을 때
+      APP_USER: RC_TEAM
+      APP_USER_PASSWORD: 123123
+      TZ: Asia/Seoul
+    ports:
+      - "1521:1521"   # Oracle Listener
+      - "5500:5500"   # EM Express (웹 콘솔)
+    volumes:
+      - oracle_data-free:/opt/oracle/oradata
+
+
+volumes:
+  mongodb_data:
+  oracle_data-free:
