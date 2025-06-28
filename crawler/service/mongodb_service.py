@@ -63,16 +63,36 @@ class MongoDBService:
             "failed_pages": gpt_processing_result.get("failed_pages", []),
             "prompt_type": metadata.get("prompt_type", "default"),
             "status": "processed",
-            "created_at": datetime.now(),
             "updated_at": datetime.now()
         }
         
-        # 문서 저장
-        result = await collection.insert_one(document)
-        return str(result.inserted_id)
+        # stock_code가 있으면 upsert, 없으면 일반 insert
+        if pdf_data.get("stock_code"):
+            filter_query = {"stock_code": pdf_data["stock_code"]}
+            update_data = {
+                "$set": document,
+                "$setOnInsert": {"created_at": datetime.now()}
+            }
+            
+            result = await collection.update_one(
+                filter_query,
+                update_data,
+                upsert=True
+            )
+            
+            if result.upserted_id:
+                return str(result.upserted_id)
+            else:
+                existing_doc = await collection.find_one(filter_query)
+                return str(existing_doc["_id"])
+        else:
+            # stock_code가 없으면 일반 insert
+            document["created_at"] = datetime.now()
+            result = await collection.insert_one(document)
+            return str(result.inserted_id)
     
     async def save_processed_document(self, stock_code: str, gpt_result: Dict[str, Any], pdf_metadata: Dict[str, Any]) -> str:
-        """처리된 문서를 MongoDB에 저장 (깔끔한 데이터만 저장)"""
+        """처리된 문서를 MongoDB에 저장 (stock_code 기준 upsert)"""
         collection = await self._get_collection()
         if collection is None:
             log.warning("MongoDB가 연결되지 않아 문서를 저장할 수 없습니다.")
@@ -110,13 +130,29 @@ class MongoDBService:
             "successful_pages": gpt_result.get("successful_pages", 0),
             "failed_pages": gpt_result.get("failed_pages", []),
             "status": "completed",
-            "created_at": datetime.now(),
             "updated_at": datetime.now()
         }
         
-        # 문서 저장
-        result = await collection.insert_one(document)
-        return str(result.inserted_id)
+        # stock_code 기준으로 upsert (기존 문서가 있으면 업데이트, 없으면 삽입)
+        filter_query = {"stock_code": stock_code}
+        update_data = {
+            "$set": document,
+            "$setOnInsert": {"created_at": datetime.now()}  # 새로 생성될 때만 created_at 설정
+        }
+        
+        result = await collection.update_one(
+            filter_query,
+            update_data,
+            upsert=True
+        )
+        
+        # 업데이트된 문서의 ID 반환
+        if result.upserted_id:
+            return str(result.upserted_id)
+        else:
+            # 기존 문서가 업데이트된 경우, 해당 문서의 ID를 조회해서 반환
+            existing_doc = await collection.find_one(filter_query)
+            return str(existing_doc["_id"])
     
     async def _read_file_content(self, file_path: str) -> bytes:
         """파일 내용을 읽어서 반환"""
@@ -207,6 +243,56 @@ class MongoDBService:
         """GridFS에서 파일 삭제 (사용하지 않음)"""
         # GridFS를 사용하지 않음
         return True
+
+    async def cleanup_duplicate_documents(self) -> Dict[str, int]:
+        """중복 문서 정리 (stock_code 기준)"""
+        collection = await self._get_collection()
+        if collection is None:
+            return {"error": "MongoDB 연결 실패"}
+        
+        # stock_code별로 그룹화하여 중복 확인
+        pipeline = [
+            {"$match": {"stock_code": {"$exists": True, "$ne": None}}},
+            {"$group": {
+                "_id": "$stock_code",
+                "count": {"$sum": 1},
+                "docs": {"$push": {"id": "$_id", "updated_at": "$updated_at"}}
+            }},
+            {"$match": {"count": {"$gt": 1}}}
+        ]
+        
+        duplicates = await collection.aggregate(pipeline).to_list(length=None)
+        
+        total_removed = 0
+        for duplicate in duplicates:
+            stock_code = duplicate["_id"]
+            docs = duplicate["docs"]
+            
+            # updated_at 기준으로 최신 문서만 남기고 나머지 삭제
+            docs.sort(key=lambda x: x["updated_at"], reverse=True)
+            docs_to_remove = docs[1:]  # 첫 번째(최신) 제외한 나머지
+            
+            for doc in docs_to_remove:
+                await collection.delete_one({"_id": doc["id"]})
+                total_removed += 1
+            
+            log.info(f"종목코드 {stock_code}: {len(docs_to_remove)}개 중복 문서 삭제")
+        
+        return {
+            "duplicate_stock_codes": len(duplicates),
+            "total_removed": total_removed
+        }
+
+    async def get_document_by_stock_code(self, stock_code: str) -> Optional[Dict[str, Any]]:
+        """종목코드로 문서 조회"""
+        collection = await self._get_collection()
+        if collection is None:
+            return None
+        
+        document = await collection.find_one({"stock_code": stock_code})
+        if document:
+            document["_id"] = str(document["_id"])
+        return document
 
 # 서비스 인스턴스
 mongodb_service = MongoDBService()
