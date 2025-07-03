@@ -13,8 +13,6 @@ services:
       - ./crawler:/app  # 소스 코드 실시간 반영
     environment:
       - TZ=Asia/Seoul
-    depends_on:
-      - oracle
 
 
   # MongoDB - 문서 저장소
@@ -53,3 +51,5 @@ services:
 volumes:
   mongodb_data:
   oracle_data-free:
+    external: true
+    name: dev_oracle_data-free
