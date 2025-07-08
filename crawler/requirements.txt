@@ -30,3 +30,16 @@ python-json-logger==2.0.7
 
 # 기타 유틸리티
 python-multipart==0.0.6
+
+# LangChain 및 LLM 프레임워크
+langchain==0.1.0
+langchain-community==0.0.10
+langchain-qdrant==0.0.1
+
+# Qdrant 벡터 데이터베이스 (LangChain 통합)
+qdrant-client==1.7.0
+
+# 임베딩 모델 (LangChain 통합)
+sentence-transformers==2.2.2
+transformers==4.36.2
+torch==2.1.2

@@ -8,13 +8,19 @@
 - **페이지별 병렬 처리**: PDF를 페이지별로 분할하여 병렬로 GPT API 호출
 - **GPT 통합 분석**: 각 페이지 분석 결과를 통합하여 종합적인 분석 제공
 - **MongoDB 저장**: 처리된 결과를 MongoDB에 체계적으로 저장
+- **벡터 임베딩**: LangChain 기반 BAAI/bge-m3 모델을 사용한 문서 임베딩 및 Qdrant 저장
+- **유사 문서 검색**: LangChain VectorStore를 통한 고성능 유사 문서 검색
+- **스마트 텍스트 분할**: RecursiveCharacterTextSplitter를 통한 지능적 문서 청킹
 - **비동기 처리**: 고성능 비동기 API 제공
 
 ## 기술 스택
 
 - **Backend**: FastAPI, Python 3.8+
-- **Database**: Oracle (기존), MongoDB (PDF 저장)
+- **Database**: Oracle (기존), MongoDB (PDF 저장), Qdrant (벡터 저장)
 - **PDF 처리**: PyPDF2, aiofiles
+- **LLM 프레임워크**: LangChain, LangChain Community
+- **임베딩**: BAAI/bge-m3, HuggingFaceEmbeddings
+- **벡터 DB**: Qdrant (LangChain VectorStore 통합)
 - **비동기 처리**: asyncio, motor (MongoDB), asyncpg (Oracle)
 
 ## 설치 및 실행
@@ -63,6 +69,13 @@ uvicorn crawler.main:app --host 0.0.0.0 --port 8000
 - `GET /stock/documents/{stock_code}` - 종목별 문서 목록 조회
 - `GET /stock/documents/{stock_code}/{document_id}` - 특정 문서 조회
 - `DELETE /stock/documents/{stock_code}/{document_id}` - 문서 삭제
+
+### 임베딩 및 벡터 검색 (새로운 기능)
+
+- `POST /embedding/store/{stock_code}` - 종목별 문서 임베딩 저장
+- `POST /embedding/search` - 유사 문서 검색
+- `GET /embedding/collection/info` - 컬렉션 정보 조회
+- `GET /embedding/document/{stock_code}` - 종목별 문서 조회
 
 ### 기존 PDF 관리 (MongoDB)
 
@@ -128,6 +141,59 @@ curl -X POST "http://localhost:8000/pdf/download" \
        "filename": "custom_name.pdf"
      }'
 ```
+
+## 사용 예시
+
+### 1. 종목별 PDF 처리 및 임베딩 저장
+
+```bash
+# 1. 종목코드로 PDF 처리
+curl -X POST "http://localhost:8000/stock/process/005930"
+
+# 2. 처리된 문서를 임베딩하여 Qdrant에 저장
+curl -X POST "http://localhost:8000/embedding/store/005930"
+```
+
+### 2. 유사 문서 검색
+
+```bash
+# 검색 쿼리로 유사한 문서 찾기
+curl -X POST "http://localhost:8000/embedding/search" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "query": "삼성전자 재무상태",
+    "limit": 5
+  }'
+```
+
+### 3. 컬렉션 정보 조회
+
+```bash
+# Qdrant 컬렉션 상태 확인
+curl -X GET "http://localhost:8000/embedding/collection/info"
+```
+
+## LangChain 기반 개선사항
+
+### 🚀 **현대적인 LLM 프레임워크 적용**
+- **LangChain 통합**: 최신 LLM 생태계의 표준 프레임워크 사용
+- **HuggingFaceEmbeddings**: HuggingFace Hub의 다양한 임베딩 모델 지원
+- **QdrantVectorStore**: LangChain의 벡터 스토어 추상화 계층 활용
+
+### 📝 **지능적 텍스트 분할**
+- **RecursiveCharacterTextSplitter**: 문맥을 고려한 스마트 청킹
+- **한국어 최적화**: 한국어 텍스트에 적합한 구분자 설정
+- **유연한 크기 조절**: 문자 수 기반의 정확한 청크 크기 제어
+
+### 🔧 **개발자 친화적 API**
+- **표준화된 인터페이스**: LangChain의 일관된 API 사용
+- **확장성**: 다른 벡터 DB나 임베딩 모델로 쉽게 전환 가능
+- **유지보수성**: 프레임워크 레벨에서의 업데이트 및 버그 수정
+
+### ⚡ **성능 최적화**
+- **비동기 처리**: 모든 벡터 연산이 비동기로 처리
+- **배치 처리**: 대량 문서의 효율적 처리
+- **메모리 효율성**: 스트리밍 방식의 문서 처리
 
 ## 로깅
 

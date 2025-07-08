@@ -19,6 +19,17 @@ class Settings(BaseSettings):
 
     FUND_PDF_URL: str
 
+    # Qdrant 설정
+    QDRANT_URL: str = "http://localhost:6333"
+    QDRANT_API_KEY: str = ""
+    QDRANT_COLLECTION_NAME: str = "fund_documents"
+    
+    # 임베딩 모델 설정
+    EMBEDDING_MODEL_NAME: str = "BAAI/bge-m3"
+    EMBEDDING_DIMENSION: int = 1024
+    CHUNK_SIZE: int = 1024
+    CHUNK_OVERLAP: int = 512
+
     model_config = SettingsConfigDict(
         env_file=str(Path(__file__).parent / ".env"),
         env_file_encoding="utf-8"
