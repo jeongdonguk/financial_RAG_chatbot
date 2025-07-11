@@ -12,6 +12,9 @@ RUN apt-get update && apt-get install -y \
     libssl-dev \
     && rm -rf /var/lib/apt/lists/*
 
+# pip 업그레이드
+RUN pip install --upgrade pip
+
 # Python 의존성 파일 복사
 COPY requirements.txt .
 
