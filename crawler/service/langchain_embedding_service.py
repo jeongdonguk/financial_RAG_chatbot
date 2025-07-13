@@ -1,6 +1,6 @@
 from typing import List, Dict, Any, Optional
 from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain_community.embeddings import HuggingFaceEmbeddings
+from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_qdrant import QdrantVectorStore
 from langchain.schema import Document
 from qdrant_client import QdrantClient
@@ -47,7 +47,7 @@ class LangChainEmbeddingService:
             self.vector_store = QdrantVectorStore(
                 client=self.qdrant_client,
                 collection_name=self.settings.QDRANT_COLLECTION_NAME,
-                embeddings=self.embeddings
+                embedding=self.embeddings
             )
             
             log.info("LangChain 컴포넌트 초기화 완료")

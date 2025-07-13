@@ -20,7 +20,7 @@ class Settings(BaseSettings):
     FUND_PDF_URL: str
 
     # Qdrant 설정
-    QDRANT_URL: str = "http://localhost:6333"
+    QDRANT_URL: str = "http://qdrant:6333"
     QDRANT_API_KEY: str = ""
     QDRANT_COLLECTION_NAME: str = "fund_documents"
     
