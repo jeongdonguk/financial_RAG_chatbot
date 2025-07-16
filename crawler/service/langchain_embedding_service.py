@@ -43,6 +43,9 @@ class LangChainEmbeddingService:
                 separators=["\n\n", "\n", " ", ""]  # 한국어에 적합한 구분자
             )
             
+            # 컬렉션 존재 여부 확인 및 생성
+            self._ensure_collection_exists()
+            
             # Qdrant 벡터 스토어 초기화
             self.vector_store = QdrantVectorStore(
                 client=self.qdrant_client,
@@ -54,6 +57,32 @@ class LangChainEmbeddingService:
             
         except Exception as e:
             log.error(f"LangChain 컴포넌트 초기화 실패: {str(e)}")
+            raise
+    
+    def _ensure_collection_exists(self):
+        """컬렉션이 존재하지 않으면 생성"""
+        try:
+            # 컬렉션 존재 여부 확인
+            collections = self.qdrant_client.get_collections()
+            existing_collections = [col.name for col in collections.collections]
+            
+            if self.settings.QDRANT_COLLECTION_NAME not in existing_collections:
+                log.info(f"컬렉션 '{self.settings.QDRANT_COLLECTION_NAME}'이 존재하지 않아 생성합니다")
+                
+                # 컬렉션 생성
+                self.qdrant_client.create_collection(
+                    collection_name=self.settings.QDRANT_COLLECTION_NAME,
+                    vectors_config={
+                        "size": self.settings.EMBEDDING_DIMENSION,
+                        "distance": "Cosine"
+                    }
+                )
+                log.info(f"컬렉션 '{self.settings.QDRANT_COLLECTION_NAME}' 생성 완료")
+            else:
+                log.info(f"컬렉션 '{self.settings.QDRANT_COLLECTION_NAME}'이 이미 존재합니다")
+                
+        except Exception as e:
+            log.error(f"컬렉션 확인/생성 실패: {str(e)}")
             raise
     
     async def get_document_by_stock_code(self, stock_code: str) -> Optional[Dict[str, Any]]:
