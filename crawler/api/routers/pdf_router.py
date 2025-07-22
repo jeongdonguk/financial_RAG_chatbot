@@ -5,6 +5,7 @@ import os
 from service.pdf_service import pdf_service
 from service.mongodb_service import mongodb_service
 from service.prompt_service import prompt_service
+from utils.document_processor import combine_page_results
 from schemas.response import (
     BaseResponse, 
     PDFDownloadRequest, 
@@ -55,26 +56,11 @@ async def download_and_store_pdf(
         
         # 페이지별 결과를 합쳐서 하나의 Markdown으로 만들기
         page_results = gpt_result.get("page_results", [])
-        combined_markdown = []
-        
-        for page_result in page_results:
-            gpt_response = page_result.get("gpt_response", {})
-            page_number = page_result.get("page_number", 0)
-            
-            # raw_response가 있으면 그것을 사용
-            if isinstance(gpt_response, dict) and "raw_response" in gpt_response:
-                content = gpt_response["raw_response"]
-            elif isinstance(gpt_response, str):
-                content = gpt_response
-            else:
-                content = str(gpt_response)
-            
-            # 페이지 헤더와 함께 추가
-            combined_markdown.append(f"## 페이지 {page_number}\n\n{content}\n\n")
+        combined_markdown = combine_page_results(page_results)
         
         # 깔끔한 메타데이터
         pdf_data["metadata"] = {
-            "parsed_content": "\n".join(combined_markdown),
+            "parsed_content": combined_markdown,
             "total_pages": gpt_result["total_pages"],
             "successful_pages": gpt_result["successful_pages"],
             "failed_pages": gpt_result["failed_pages"],
@@ -329,53 +315,6 @@ async def cleanup_duplicate_documents():
             detail=f"중복 문서 정리 실패: {str(e)}"
         )
 
-@router.get("/documents/stock/{stock_code}", response_model=BaseResponse[PDFDocument], summary="종목코드로 문서 조회")
-async def get_document_by_stock_code(stock_code: str = Path(..., description="종목코드")):
-    """
-    종목코드로 문서 조회
-    
-    Args:
-        stock_code: 조회할 종목코드
-        
-    Returns:
-        BaseResponse[PDFDocument]: PDF 문서 정보
-    """
-    try:
-        document = await mongodb_service.get_document_by_stock_code(stock_code)
-        
-        if not document:
-            raise HTTPException(
-                status_code=404,
-                detail=f"종목코드 {stock_code}에 해당하는 문서를 찾을 수 없습니다"
-            )
-        
-        pdf_document = PDFDocument(
-            id=document["_id"],
-            filename=document["filename"],
-            original_url=document["original_url"],
-            file_size=document["file_size"],
-            content_type=document["content_type"],
-            download_time=document["download_time"],
-            metadata=PDFMetadata(**document.get("metadata", {})),
-            status=document["status"],
-            created_at=document["created_at"],
-            updated_at=document["updated_at"]
-        )
-        
-        return BaseResponse(
-            success=True,
-            message=f"종목코드 {stock_code}의 문서 조회가 성공적으로 완료되었습니다",
-            data=pdf_document
-        )
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        log.error(f"종목코드 {stock_code} 문서 조회 실패: {str(e)}")
-        raise HTTPException(
-            status_code=500,
-            detail=f"종목코드 {stock_code} 문서 조회 실패: {str(e)}"
-        )
 
 
 

@@ -3,6 +3,7 @@ from datetime import datetime
 from bson import ObjectId
 from core.mongodb import get_database
 from core.logging import get_logger
+from utils.document_processor import combine_page_results
 
 log = get_logger("mongodb_service")
 
@@ -32,22 +33,7 @@ class MongoDBService:
         
         # 페이지별 결과를 합쳐서 하나의 Markdown으로 만들기
         page_results = gpt_processing_result.get("page_results", [])
-        combined_markdown = []
-        
-        for page_result in page_results:
-            gpt_response = page_result.get("gpt_response", {})
-            page_number = page_result.get("page_number", 0)
-            
-            # raw_response가 있으면 그것을 사용
-            if isinstance(gpt_response, dict) and "raw_response" in gpt_response:
-                content = gpt_response["raw_response"]
-            elif isinstance(gpt_response, str):
-                content = gpt_response
-            else:
-                content = str(gpt_response)
-            
-            # 페이지 헤더와 함께 추가
-            combined_markdown.append(f"## 페이지 {page_number}\n\n{content}\n\n")
+        combined_markdown = combine_page_results(page_results)
         
         # 깔끔한 문서 구조
         document = {
@@ -57,7 +43,7 @@ class MongoDBService:
             "content_type": pdf_data["content_type"],
             "download_time": pdf_data["download_time"],
             "stock_code": pdf_data.get("stock_code"),
-            "parsed_content": "\n".join(combined_markdown),  # 합쳐진 Markdown 내용
+            "parsed_content": combined_markdown,  # 합쳐진 Markdown 내용
             "total_pages": gpt_processing_result.get("total_pages", 0),
             "successful_pages": gpt_processing_result.get("successful_pages", 0),
             "failed_pages": gpt_processing_result.get("failed_pages", []),
@@ -100,22 +86,7 @@ class MongoDBService:
         
         # 페이지별 결과를 합쳐서 하나의 Markdown으로 만들기
         page_results = gpt_result.get("page_results", [])
-        combined_markdown = []
-        
-        for page_result in page_results:
-            gpt_response = page_result.get("gpt_response", {})
-            page_number = page_result.get("page_number", 0)
-            
-            # raw_response가 있으면 그것을 사용
-            if isinstance(gpt_response, dict) and "raw_response" in gpt_response:
-                content = gpt_response["raw_response"]
-            elif isinstance(gpt_response, str):
-                content = gpt_response
-            else:
-                content = str(gpt_response)
-            
-            # 페이지 헤더와 함께 추가
-            combined_markdown.append(f"## 페이지 {page_number}\n\n{content}\n\n")
+        combined_markdown = combine_page_results(page_results)
         
         # 깔끔한 문서 구조
         document = {
@@ -125,7 +96,7 @@ class MongoDBService:
             "file_size": pdf_metadata.get("file_size", 0),
             "content_type": pdf_metadata.get("content_type", "application/pdf"),
             "download_time": pdf_metadata.get("download_time", datetime.now()),
-            "parsed_content": "\n".join(combined_markdown),  # 합쳐진 Markdown 내용
+            "parsed_content": combined_markdown,  # 합쳐진 Markdown 내용
             "total_pages": gpt_result.get("total_pages", 0),
             "successful_pages": gpt_result.get("successful_pages", 0),
             "failed_pages": gpt_result.get("failed_pages", []),
@@ -154,17 +125,6 @@ class MongoDBService:
             existing_doc = await collection.find_one(filter_query)
             return str(existing_doc["_id"])
     
-    async def _read_file_content(self, file_path: str) -> bytes:
-        """파일 내용을 읽어서 반환"""
-        import aiofiles
-        async with aiofiles.open(file_path, 'rb') as f:
-            content = await f.read()
-        return content
-    
-    async def _save_file_to_gridfs(self, file_path: str, filename: str) -> str:
-        """파일을 GridFS에 저장 (사용하지 않음)"""
-        # GridFS를 사용하지 않고 파일 내용을 직접 저장
-        return "no_gridfs"
     
     async def get_pdf_document(self, document_id: str) -> Optional[Dict[str, Any]]:
         """PDF 문서 조회"""
@@ -223,9 +183,7 @@ class MongoDBService:
         if not document:
             return False
         
-        # GridFS에서 파일 삭제
-        if "file_id" in document:
-            await self._delete_file_from_gridfs(document["file_id"])
+        # 파일 관련 정리 (GridFS 사용하지 않음)
         
         # 문서 삭제
         collection = await self._get_collection()
@@ -234,15 +192,6 @@ class MongoDBService:
         result = await collection.delete_one({"_id": ObjectId(document_id)})
         return result.deleted_count > 0
     
-    async def _download_file_from_gridfs(self, file_id: str) -> bytes:
-        """GridFS에서 파일 다운로드 (사용하지 않음)"""
-        # GridFS를 사용하지 않음
-        return b""
-
-    async def _delete_file_from_gridfs(self, file_id: str) -> bool:
-        """GridFS에서 파일 삭제 (사용하지 않음)"""
-        # GridFS를 사용하지 않음
-        return True
 
     async def cleanup_duplicate_documents(self) -> Dict[str, int]:
         """중복 문서 정리 (stock_code 기준)"""
