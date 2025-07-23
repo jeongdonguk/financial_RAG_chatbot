@@ -222,9 +222,7 @@ async def delete_stock_document(
                 detail="해당 문서를 찾을 수 없습니다"
             )
         
-        # GridFS에서 파일 삭제
-        if "file_id" in document:
-            await mongodb_service._delete_file_from_gridfs(document["file_id"])
+        # 파일 관련 정리 (GridFS 사용하지 않음)
         
         # 문서 삭제
         result = await mongodb_service.collection.delete_one({
