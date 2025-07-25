@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from contextlib import asynccontextmanager
 from api.middlewares.access_log import AccessLogMiddleware
-from api.routers import pdf_router, stock_router, embedding_router
+from api.routers import pdf_router, stock_router, embedding_router, common_router
 from core.mongodb import connect_to_mongo, close_mongo_connection
 from core.logging import get_logger
 
@@ -33,6 +33,7 @@ app = FastAPI(
 app.add_middleware(AccessLogMiddleware)
 
 # 라우터 등록
+app.include_router(common_router.router)
 app.include_router(pdf_router.router)
 app.include_router(stock_router.router)
 app.include_router(embedding_router.router)
