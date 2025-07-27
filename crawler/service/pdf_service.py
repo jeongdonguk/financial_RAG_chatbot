@@ -24,6 +24,7 @@ class PDFDownloadService:
         self.download_dir = Path("./downloads")
         self.download_dir.mkdir(exist_ok=True)
         self.executor = ThreadPoolExecutor(max_workers=4)
+        self.settings = Settings()
     
     def generate_pdf_url(self, stock_code: str) -> str:
         """
@@ -37,7 +38,7 @@ class PDFDownloadService:
         """
         # 실제 URL 패턴에 맞게 수정 필요
         # 예시: https://example.com/reports/{stock_code}.pdf
-        return f"{settings.FUND_PDF_URL}{stock_code}"
+        return f"{self.settings.FUND_PDF_URL}{stock_code}"
     
     async def download_pdf(self, url: str, stock_code: str = None) -> Dict[str, Any]:
         """
@@ -61,7 +62,7 @@ class PDFDownloadService:
             file_path = self.download_dir / filename
             
             async with aiohttp.ClientSession(
-                timeout=aiohttp.ClientTimeout(total=settings.PDF_DOWNLOAD_TIMEOUT)
+                timeout=aiohttp.ClientTimeout(total=self.settings.PDF_DOWNLOAD_TIMEOUT)
             ) as session:
 
                 async with session.get(url) as response:
@@ -71,7 +72,7 @@ class PDFDownloadService:
                     if 'application/pdf' not in content_type:
                         raise Exception(f"PDF가 아닌 파일 타입: {content_type}")
                     content_length = response.headers.get('content-length')
-                    if content_length and int(content_length) > settings.PDF_MAX_SIZE_MB * 1024 * 1024:
+                    if content_length and int(content_length) > self.settings.PDF_MAX_SIZE_MB * 1024 * 1024:
                         raise Exception(f"파일 크기 초과: {content_length} bytes")
 
                     async with aiofiles.open(file_path, 'wb') as f:
@@ -79,7 +80,7 @@ class PDFDownloadService:
                             await f.write(chunk)
 
             file_size = file_path.stat().st_size
-            if file_size >= settings.PDF_MAX_SIZE_MB * 1024 * 1024:
+            if file_size >= self.settings.PDF_MAX_SIZE_MB * 1024 * 1024:
                 file_path.unlink(missing_ok=True)
                 raise Exception(f"다운로드된 파일 크기 초과: {file_size} bytes")
 
@@ -209,18 +210,18 @@ class PDFDownloadService:
             # httpx 클라이언트를 직접 생성하여 사용
             async with httpx.AsyncClient() as http_client:
                 client = openai.AsyncOpenAI(
-                    api_key=settings.OPENAI_API_KEY,
+                    api_key=self.settings.OPENAI_API_KEY,
                     http_client=http_client
                 )
                 
                 response = await client.chat.completions.create(
-                    model=settings.OPENAI_MODEL,
+                    model=self.settings.OPENAI_MODEL,
                     messages=[
                         {"role": "system", "content": prompt},
                         {"role": "user", "content": f"페이지 {page['page_number']} 내용:\n\n{page['text']}"}
                     ],
-                    max_tokens=settings.OPENAI_MAX_TOKENS,
-                    temperature=settings.OPENAI_TEMPERATURE
+                    max_tokens=self.settings.OPENAI_MAX_TOKENS,
+                    temperature=self.settings.OPENAI_TEMPERATURE
                 )
                 
                 result_text = response.choices[0].message.content
