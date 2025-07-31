@@ -33,16 +33,22 @@ pip install -r requirements.txt
 
 ### 2. 환경변수 설정
 
-`env.example` 파일을 참고하여 `.env` 파일을 생성하고 필요한 설정을 입력하세요.
+`crawler` 디렉토리에 `.env` 파일을 생성하고 필요한 환경변수들을 설정하세요.
 
-```bash
-cp env.example .env
-```
+**필수 환경변수:**
+- 데이터베이스 연결 정보 (DATABASE_URL, MONGODB_URL, MONGODB_DATABASE, MONGODB_COLLECTION)
+- OpenAI API 설정 (OPENAI_API_KEY, OPENAI_MODEL, OPENAI_MAX_TOKENS, OPENAI_TEMPERATURE)
+- PDF 처리 설정 (PDF_DOWNLOAD_TIMEOUT, PDF_MAX_SIZE_MB, FUND_PDF_URL)
+- Qdrant 벡터 DB 설정 (QDRANT_URL, QDRANT_API_KEY, QDRANT_COLLECTION_NAME)
+- 임베딩 모델 설정 (EMBEDDING_MODEL_NAME, EMBEDDING_DIMENSION, CHUNK_SIZE, CHUNK_OVERLAP)
+
+**보안 주의**: 실제 API 키나 비밀번호는 절대 공개 저장소에 커밋하지 마세요.
 
 ### 3. 데이터베이스 설정
 
 - **Oracle**: 기존 데이터베이스 연결 정보 설정
 - **MongoDB**: MongoDB 서버 실행 및 연결 정보 설정
+- **Qdrant**: 벡터 데이터베이스 실행 및 연결 정보 설정
 
 ### 4. 애플리케이션 실행
 
@@ -94,19 +100,33 @@ uvicorn crawler.main:app --host 0.0.0.0 --port 8000
 ```
 crawler/
 ├── api/
-│   ├── middlewares/          # 미들웨어
+│   ├── middlewares/          # 미들웨어 (접근 로그)
 │   └── routers/             # API 라우터
+│       ├── common_router.py    # 공통 API
+│       ├── pdf_router.py       # PDF 관리 API
+│       ├── stock_router.py     # 종목별 처리 API
+│       ├── embedding_router.py # 임베딩 및 벡터 검색 API
+│       └── finance_data.py     # 금융 데이터 API
 ├── core/
-│   ├── config.py            # 설정 관리
+│   ├── config.py            # 환경변수 설정 관리
 │   ├── database.py          # Oracle DB 연결
 │   ├── mongodb.py           # MongoDB 연결
 │   └── logging.py           # 로깅 설정
+├── service/                 # 비즈니스 로직 서비스
+│   ├── pdf_service.py       # PDF 처리 서비스
+│   ├── mongodb_service.py   # MongoDB 서비스
+│   ├── langchain_embedding_service.py # LangChain 임베딩 서비스
+│   ├── prompt_service.py    # 프롬프트 관리 서비스
+│   └── count_service.py     # 카운트 서비스
+├── utils/                   # 유틸리티 함수들
+│   ├── document_processor.py # 문서 처리 유틸리티
+│   └── exceptions.py        # 커스텀 예외 클래스
 ├── db/
 │   ├── models/              # SQLAlchemy 모델
 │   └── crud/                # CRUD 작업
-├── service/                 # 비즈니스 로직
 ├── schemas/                 # Pydantic 스키마
-└── main.py                  # 애플리케이션 진입점
+├── main.py                  # 애플리케이션 진입점
+└── Dockerfile               # 컨테이너 설정
 ```
 
 ## 사용 예시
@@ -124,6 +144,9 @@ curl -X POST "http://localhost:8000/stock/process/005930?prompt_type=fund_docume
 ### 종목별 문서 조회
 
 ```bash
+# 공통 문서 조회 (새로운 기능)
+curl -X GET "http://localhost:8000/common/document/005930"
+
 # 삼성전자 문서 목록 조회
 curl -X GET "http://localhost:8000/stock/documents/005930"
 
@@ -173,27 +196,29 @@ curl -X POST "http://localhost:8000/embedding/search" \
 curl -X GET "http://localhost:8000/embedding/collection/info"
 ```
 
-## LangChain 기반 개선사항
+## 리팩토링 개선사항
 
-### 🚀 **현대적인 LLM 프레임워크 적용**
-- **LangChain 통합**: 최신 LLM 생태계의 표준 프레임워크 사용
-- **HuggingFaceEmbeddings**: HuggingFace Hub의 다양한 임베딩 모델 지원
-- **QdrantVectorStore**: LangChain의 벡터 스토어 추상화 계층 활용
+### **코드 품질 향상**
+- **중복 코드 제거**: `utils/document_processor.py`로 공통 로직 통합
+- **API 구조 개선**: `common_router.py`로 중복 엔드포인트 해결
+- **미사용 코드 정리**: GridFS 관련 불필요한 코드 제거
+- **유틸리티 모듈**: 재사용 가능한 함수들을 별도 모듈로 분리
 
-### 📝 **지능적 텍스트 분할**
-- **RecursiveCharacterTextSplitter**: 문맥을 고려한 스마트 청킹
-- **한국어 최적화**: 한국어 텍스트에 적합한 구분자 설정
-- **유연한 크기 조절**: 문자 수 기반의 정확한 청크 크기 제어
+### **설정 관리 개선**
+- **환경변수 기반**: 모든 설정을 `.env` 파일로 관리
+- **보안 강화**: API 키 등 민감한 정보를 코드에서 분리
+- **환경별 설정**: 개발/운영 환경에 따른 유연한 설정 지원
 
-### 🔧 **개발자 친화적 API**
-- **표준화된 인터페이스**: LangChain의 일관된 API 사용
-- **확장성**: 다른 벡터 DB나 임베딩 모델로 쉽게 전환 가능
-- **유지보수성**: 프레임워크 레벨에서의 업데이트 및 버그 수정
+### **LangChain 기반 벡터 처리**
+- **현대적 프레임워크**: LangChain을 통한 표준화된 임베딩 처리
+- **BAAI/bge-m3 모델**: 고성능 다국어 임베딩 모델 사용
+- **Qdrant 통합**: LangChain VectorStore를 통한 벡터 데이터베이스 연동
+- **스마트 청킹**: RecursiveCharacterTextSplitter로 지능적 문서 분할
 
-### ⚡ **성능 최적화**
+### **성능 및 유지보수성**
 - **비동기 처리**: 모든 벡터 연산이 비동기로 처리
-- **배치 처리**: 대량 문서의 효율적 처리
-- **메모리 효율성**: 스트리밍 방식의 문서 처리
+- **에러 처리**: 커스텀 예외 클래스로 명확한 에러 관리
+- **로깅 개선**: 구조화된 JSON 로깅으로 디버깅 용이성 향상
 
 ## 로깅
 
