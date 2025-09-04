@@ -2,7 +2,7 @@ from time import perf_counter
 from typing import Callable
 from fastapi import Request, Response
 from starlette.middleware.base import BaseHTTPMiddleware
-from app.config.logger import get_logger
+from core.logging import get_logger
 
 _access = get_logger("access")
 
