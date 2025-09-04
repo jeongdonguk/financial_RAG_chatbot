@@ -261,6 +261,9 @@ secrets/
 *.p12
 *.pfx
 
+# Prompt templates (contains sensitive information)
+crawler/service/prompt_service.py
+
 # Data files (crawled data, datasets)
 data/
 datasets/
