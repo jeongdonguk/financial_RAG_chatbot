@@ -15,7 +15,7 @@ router = APIRouter(
     tags=["종목별 PDF 처리"]
 )
 
-@router.post("/process/{stock_code}", response_model=BaseResponse[Dict[str, Any]])
+@router.post("/process/{stock_code}", response_model=BaseResponse[Dict[str, Any]], summary="종목별 PDF 처리")
 async def process_stock_pdf(
     stock_code: str = Path(..., description="종목코드"),
     prompt_type: str = Query("default", description="프롬프트 타입"),
@@ -95,7 +95,7 @@ async def process_stock_pdf(
             detail=f"종목 {stock_code} PDF 처리 실패: {str(e)}"
         )
 
-@router.get("/documents/{stock_code}", response_model=BaseResponse[Dict[str, Any]])
+@router.get("/documents/{stock_code}", response_model=BaseResponse[Dict[str, Any]], summary="종목별 문서 목록 조회")
 async def get_stock_documents(
     stock_code: str = Path(..., description="종목코드"),
     skip: int = Query(0, ge=0, description="건너뛸 문서 수"),
@@ -146,7 +146,7 @@ async def get_stock_documents(
             detail=f"종목 {stock_code} 문서 목록 조회 실패: {str(e)}"
         )
 
-@router.get("/documents/{stock_code}/{document_id}", response_model=BaseResponse[Dict[str, Any]])
+@router.get("/documents/{stock_code}/{document_id}", response_model=BaseResponse[Dict[str, Any]], summary="종목별 특정 문서 조회")
 async def get_stock_document(
     stock_code: str = Path(..., description="종목코드"),
     document_id: str = Path(..., description="문서 ID")
@@ -192,7 +192,7 @@ async def get_stock_document(
             detail=f"문서 조회 실패: {str(e)}"
         )
 
-@router.delete("/documents/{stock_code}/{document_id}", response_model=BaseResponse[Dict[str, Any]])
+@router.delete("/documents/{stock_code}/{document_id}", response_model=BaseResponse[Dict[str, Any]], summary="종목별 문서 삭제")
 async def delete_stock_document(
     stock_code: str = Path(..., description="종목코드"),
     document_id: str = Path(..., description="문서 ID")

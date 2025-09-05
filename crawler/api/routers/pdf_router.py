@@ -21,7 +21,7 @@ router = APIRouter(
     tags=["PDF 관리"]
 )
 
-@router.post("/download", response_model=BaseResponse[PDFDocument])
+@router.post("/download", response_model=BaseResponse[PDFDocument], summary="PDF 다운로드 및 처리")
 async def download_and_store_pdf(
     request: PDFDownloadRequest,
     prompt_type: str = Query("default", description="프롬프트 타입"),
@@ -119,7 +119,7 @@ async def download_and_store_pdf(
             detail=f"PDF 다운로드 및 저장 실패: {str(e)}"
         )
 
-@router.get("/documents", response_model=BaseResponse[PDFDocumentList])
+@router.get("/documents", response_model=BaseResponse[PDFDocumentList], summary="PDF 문서 목록 조회")
 async def get_pdf_documents(
     skip: int = Query(0, ge=0, description="건너뛸 문서 수"),
     limit: int = Query(10, ge=1, le=100, description="조회할 문서 수"),
@@ -183,7 +183,7 @@ async def get_pdf_documents(
             detail=f"PDF 문서 목록 조회 실패: {str(e)}"
         )
 
-@router.get("/documents/{document_id}", response_model=BaseResponse[PDFDocument])
+@router.get("/documents/{document_id}", response_model=BaseResponse[PDFDocument], summary="특정 PDF 문서 조회")
 async def get_pdf_document(document_id: str = Path(..., description="문서 ID")):
     """
     특정 PDF 문서 조회
@@ -231,7 +231,7 @@ async def get_pdf_document(document_id: str = Path(..., description="문서 ID")
             detail=f"PDF 문서 조회 실패: {str(e)}"
         )
 
-@router.put("/documents/{document_id}/status", response_model=BaseResponse[dict])
+@router.put("/documents/{document_id}/status", response_model=BaseResponse[dict], summary="PDF 문서 상태 업데이트")
 async def update_document_status(
     document_id: str = Path(..., description="문서 ID"),
     status: str = Query(..., description="새로운 상태")
@@ -270,7 +270,7 @@ async def update_document_status(
             detail=f"문서 상태 업데이트 실패: {str(e)}"
         )
 
-@router.delete("/documents/{document_id}", response_model=BaseResponse[dict])
+@router.delete("/documents/{document_id}", response_model=BaseResponse[dict], summary="PDF 문서 삭제")
 async def delete_pdf_document(document_id: str = Path(..., description="문서 ID")):
     """
     PDF 문서 삭제
@@ -305,7 +305,7 @@ async def delete_pdf_document(document_id: str = Path(..., description="문서 I
             detail=f"PDF 문서 삭제 실패: {str(e)}"
         )
 
-@router.post("/cleanup-duplicates", response_model=BaseResponse[dict])
+@router.post("/cleanup-duplicates", response_model=BaseResponse[dict], summary="중복 문서 정리")
 async def cleanup_duplicate_documents():
     """
     중복 문서 정리 (stock_code 기준)
@@ -329,7 +329,7 @@ async def cleanup_duplicate_documents():
             detail=f"중복 문서 정리 실패: {str(e)}"
         )
 
-@router.get("/documents/stock/{stock_code}", response_model=BaseResponse[PDFDocument])
+@router.get("/documents/stock/{stock_code}", response_model=BaseResponse[PDFDocument], summary="종목코드로 문서 조회")
 async def get_document_by_stock_code(stock_code: str = Path(..., description="종목코드")):
     """
     종목코드로 문서 조회
