@@ -26,7 +26,9 @@ fund_RAG_chatbot/
 │   │       ├── common_router.py    # 공통 API
 │   │       ├── pdf_router.py       # PDF 관리 API
 │   │       ├── stock_router.py     # 종목별 처리 API
-│   │       └── embedding_router.py # 임베딩 및 벡터 검색 API
+│   │       ├── mongodb_router.py   # MongoDB 문서 관리 API
+│   │       ├── qdrant_router.py    # Qdrant 벡터 검색 API
+│   │       └── finance_data.py     # 금융 데이터 API
 │   ├── core/                  # 핵심 설정 및 연결 관리
 │   │   ├── config.py          # 환경변수 설정 관리
 │   │   ├── database.py        # Oracle DB 연결
@@ -75,9 +77,9 @@ fund_RAG_chatbot/
 - **공통 API**: 종목별 문서 조회 등 공통 기능
 - **PDF 처리 API**: 단일 PDF 다운로드 및 처리
 - **종목별 처리 API**: 종목코드 기반 자동 PDF 처리
-- **임베딩 API**: 문서 임베딩 저장 및 벡터 검색
-- **문서 관리 API**: 조회, 상태 업데이트, 삭제 기능
-- **중복 정리 API**: stock_code 기준 중복 문서 자동 정리
+- **MongoDB 관리 API**: 문서 조회, 상태 업데이트, 삭제, 중복 정리
+- **Qdrant 벡터 API**: 문서 임베딩 저장, 벡터 검색, 컬렉션 관리
+- **금융 데이터 API**: Oracle DB 기반 금융 데이터 조회
 
 ## 기술 스택
 
@@ -103,23 +105,60 @@ fund_RAG_chatbot/
 POST /stock/process/005930
 
 # 처리된 문서를 임베딩하여 Qdrant에 저장
-POST /embedding/store/005930
+POST /qdrant/store/005930
 ```
 
 ### 2. 벡터 검색
 ```bash
 # 유사 문서 검색
-POST /embedding/search
+POST /qdrant/search/vector
 {
   "query": "삼성전자 재무상태",
   "limit": 5
 }
 
+# 키워드 검색
+POST /qdrant/search/keywords
+{
+  "query": "삼성전자",
+  "limit": 5
+}
+
+# 하이브리드 검색
+POST /qdrant/search/hybrid
+{
+  "query": "삼성전자 재무상태",
+  "limit": 5,
+  "vector_weight": 0.7,
+  "keyword_weight": 0.3
+}
+
 # 컬렉션 정보 조회
-GET /embedding/collection/info
+GET /qdrant/collection/info
 ```
 
-### 3. 문서 관리
+### 3. MongoDB 문서 관리
+```bash
+# 문서 목록 조회
+GET /mongodb/documents?skip=0&limit=10&status=completed
+
+# 특정 문서 조회
+GET /mongodb/documents/{document_id}
+
+# 종목코드로 문서 조회
+GET /mongodb/documents/stock/005930
+
+# 문서 상태 업데이트
+PUT /mongodb/documents/{document_id}/status?status=processing
+
+# 문서 삭제
+DELETE /mongodb/documents/{document_id}
+
+# 중복 문서 정리
+POST /mongodb/cleanup-duplicates
+```
+
+### 4. 공통 기능
 ```bash
 # 공통 문서 조회
 GET /common/document/005930
@@ -127,13 +166,8 @@ GET /common/document/005930
 # PDF 문서 목록 조회
 GET /pdf/documents?skip=0&limit=10
 
-# 특정 문서 조회
+# 특정 PDF 문서 조회
 GET /pdf/documents/{document_id}
-```
-
-### 4. 중복 문서 정리
-```bash
-POST /pdf/cleanup-duplicates
 ```
 
 ## 실행 방법
@@ -182,6 +216,7 @@ python main.py
   "total_pages": 4,
   "successful_pages": 4,
   "failed_pages": [],
+  "success_yn": "Y",
   "status": "completed",
   "created_at": "2025-01-05T...",
   "updated_at": "2025-01-05T..."
@@ -194,11 +229,17 @@ python main.py
 - `stock_code`가 동일한 경우 기존 문서를 업데이트
 - 새로운 `stock_code`인 경우 새 문서 생성
 - `created_at`은 유지, `updated_at`은 갱신
+- `success_yn` 필드로 페이지 처리 성공 여부 자동 설정
 
 ### 중복 정리
 - 기존 중복 문서들을 `updated_at` 기준으로 정리
 - 최신 문서만 유지하고 나머지 삭제
 - API를 통한 일괄 정리 가능
+
+### 벡터화 조건
+- `success_yn`이 "Y"인 문서만 Qdrant에 벡터화
+- 동일한 `stock_code` 입력 시 기존 벡터 데이터 삭제 후 새로 저장
+- 청크별 고유 ID (`chunk_id`)로 중복 방지
 
 ## 다음 단계 (예정)
 

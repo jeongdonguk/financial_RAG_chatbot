@@ -12,6 +12,8 @@
 - **유사 문서 검색**: LangChain VectorStore를 통한 고성능 유사 문서 검색
 - **스마트 텍스트 분할**: RecursiveCharacterTextSplitter를 통한 지능적 문서 청킹
 - **비동기 처리**: 고성능 비동기 API 제공
+- **성공 여부 검증**: total_pages와 successful_pages 비교하여 success_yn 자동 설정
+- **중복 방지**: stock_code와 chunk_number 기준으로 벡터 데이터 중복 방지
 
 ## 기술 스택
 
@@ -76,12 +78,24 @@ uvicorn crawler.main:app --host 0.0.0.0 --port 8000
 - `GET /stock/documents/{stock_code}/{document_id}` - 특정 문서 조회
 - `DELETE /stock/documents/{stock_code}/{document_id}` - 문서 삭제
 
-### 임베딩 및 벡터 검색 (새로운 기능)
+### MongoDB 문서 관리 (새로운 기능)
 
-- `POST /embedding/store/{stock_code}` - 종목별 문서 임베딩 저장
-- `POST /embedding/search` - 유사 문서 검색
-- `GET /embedding/collection/info` - 컬렉션 정보 조회
-- `GET /embedding/document/{stock_code}` - 종목별 문서 조회
+- `GET /mongodb/documents` - 문서 목록 조회
+- `GET /mongodb/documents/{document_id}` - 특정 문서 조회
+- `GET /mongodb/documents/stock/{stock_code}` - 종목코드로 문서 조회
+- `PUT /mongodb/documents/{document_id}/status` - 문서 상태 업데이트
+- `DELETE /mongodb/documents/{document_id}` - 문서 삭제
+- `POST /mongodb/cleanup-duplicates` - 중복 문서 정리
+
+### Qdrant 벡터 검색 (새로운 기능)
+
+- `POST /qdrant/store/{stock_code}` - 종목별 문서 임베딩 저장
+- `POST /qdrant/search/vector` - 벡터 유사도 검색
+- `POST /qdrant/search/keywords` - 키워드 검색
+- `POST /qdrant/search/hybrid` - 하이브리드 검색
+- `GET /qdrant/collection/info` - 컬렉션 정보 조회
+- `GET /qdrant/documents/{stock_code}/exists` - 문서 존재 여부 확인
+- `DELETE /qdrant/documents/{stock_code}` - 종목별 문서 삭제
 
 ### 기존 PDF 관리 (MongoDB)
 
@@ -105,7 +119,8 @@ crawler/
 │       ├── common_router.py    # 공통 API
 │       ├── pdf_router.py       # PDF 관리 API
 │       ├── stock_router.py     # 종목별 처리 API
-│       ├── embedding_router.py # 임베딩 및 벡터 검색 API
+│       ├── mongodb_router.py   # MongoDB 문서 관리 API
+│       ├── qdrant_router.py    # Qdrant 벡터 검색 API
 │       └── finance_data.py     # 금융 데이터 API
 ├── core/
 │   ├── config.py            # 환경변수 설정 관리
@@ -174,35 +189,67 @@ curl -X POST "http://localhost:8000/pdf/download" \
 curl -X POST "http://localhost:8000/stock/process/005930"
 
 # 2. 처리된 문서를 임베딩하여 Qdrant에 저장
-curl -X POST "http://localhost:8000/embedding/store/005930"
+curl -X POST "http://localhost:8000/qdrant/store/005930"
 ```
 
-### 2. 유사 문서 검색
+### 2. 벡터 검색
 
 ```bash
-# 검색 쿼리로 유사한 문서 찾기
-curl -X POST "http://localhost:8000/embedding/search" \
+# 벡터 유사도 검색
+curl -X POST "http://localhost:8000/qdrant/search/vector" \
   -H "Content-Type: application/json" \
   -d '{
     "query": "삼성전자 재무상태",
     "limit": 5
   }'
+
+# 키워드 검색
+curl -X POST "http://localhost:8000/qdrant/search/keywords" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "query": "삼성전자",
+    "limit": 5
+  }'
+
+# 하이브리드 검색
+curl -X POST "http://localhost:8000/qdrant/search/hybrid" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "query": "삼성전자 재무상태",
+    "limit": 5,
+    "vector_weight": 0.7,
+    "keyword_weight": 0.3
+  }'
 ```
 
-### 3. 컬렉션 정보 조회
+### 3. MongoDB 문서 관리
+
+```bash
+# 문서 목록 조회
+curl -X GET "http://localhost:8000/mongodb/documents?skip=0&limit=10&status=completed"
+
+# 종목코드로 문서 조회
+curl -X GET "http://localhost:8000/mongodb/documents/stock/005930"
+
+# 중복 문서 정리
+curl -X POST "http://localhost:8000/mongodb/cleanup-duplicates"
+```
+
+### 4. 컬렉션 정보 조회
 
 ```bash
 # Qdrant 컬렉션 상태 확인
-curl -X GET "http://localhost:8000/embedding/collection/info"
+curl -X GET "http://localhost:8000/qdrant/collection/info"
 ```
 
 ## 리팩토링 개선사항
 
 ### **코드 품질 향상**
 - **중복 코드 제거**: `utils/document_processor.py`로 공통 로직 통합
-- **API 구조 개선**: `common_router.py`로 중복 엔드포인트 해결
+- **API 구조 개선**: MongoDB와 Qdrant 전용 라우터로 기능 분리
 - **미사용 코드 정리**: GridFS 관련 불필요한 코드 제거
 - **유틸리티 모듈**: 재사용 가능한 함수들을 별도 모듈로 분리
+- **서비스 레이어 강화**: 모든 데이터베이스 작업을 서비스 메서드로 통합
 
 ### **설정 관리 개선**
 - **환경변수 기반**: 모든 설정을 `.env` 파일로 관리
@@ -219,6 +266,9 @@ curl -X GET "http://localhost:8000/embedding/collection/info"
 - **비동기 처리**: 모든 벡터 연산이 비동기로 처리
 - **에러 처리**: 커스텀 예외 클래스로 명확한 에러 관리
 - **로깅 개선**: 구조화된 JSON 로깅으로 디버깅 용이성 향상
+- **성공 여부 검증**: total_pages와 successful_pages 비교하여 success_yn 자동 설정
+- **중복 방지 강화**: stock_code와 chunk_number 기준으로 벡터 데이터 중복 방지
+- **배치 처리 최적화**: MongoDB 중복 정리 시 배치 삭제로 성능 향상
 
 ## 로깅
 
