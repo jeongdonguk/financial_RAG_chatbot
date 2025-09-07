@@ -19,6 +19,26 @@ class MongoDBService:
         except Exception as e:
             log.warning(f"MongoDB 연결 실패: {str(e)}")
             return None
+    
+    def _create_document_structure(self, data: Dict[str, Any], stock_code: str = None) -> Dict[str, Any]:
+        """문서 구조 생성 공통 함수"""
+        # 페이지별 결과를 합쳐서 하나의 Markdown으로 만들기
+        page_results = data.get("page_results", [])
+        combined_markdown = combine_page_results(page_results)
+        
+        # 페이지 처리 결과 확인
+        total_pages = data.get("total_pages", 0)
+        successful_pages = data.get("successful_pages", 0)
+        success_yn = "Y" if total_pages == successful_pages else "N"
+        
+        return {
+            "parsed_content": combined_markdown,
+            "total_pages": total_pages,
+            "successful_pages": successful_pages,
+            "failed_pages": data.get("failed_pages", []),
+            "success_yn": success_yn,
+            "updated_at": datetime.now()
+        }
 
     async def save_pdf_document(self, pdf_data: Dict[str, Any]) -> str:
         """PDF 문서를 MongoDB에 저장 (깔끔한 데이터만 저장)"""
@@ -31,14 +51,8 @@ class MongoDBService:
         metadata = pdf_data.get("metadata", {})
         gpt_processing_result = metadata.get("gpt_processing_result", {})
         
-        # 페이지별 결과를 합쳐서 하나의 Markdown으로 만들기
-        page_results = gpt_processing_result.get("page_results", [])
-        combined_markdown = combine_page_results(page_results)
-        
-        # 페이지 처리 결과 확인
-        total_pages = gpt_processing_result.get("total_pages", 0)
-        successful_pages = gpt_processing_result.get("successful_pages", 0)
-        success_yn = "Y" if total_pages == successful_pages else "N"
+        # 공통 문서 구조 생성
+        common_structure = self._create_document_structure(gpt_processing_result)
         
         # 깔끔한 문서 구조
         document = {
@@ -48,14 +62,9 @@ class MongoDBService:
             "content_type": pdf_data["content_type"],
             "download_time": pdf_data["download_time"],
             "stock_code": pdf_data.get("stock_code"),
-            "parsed_content": combined_markdown,  # 합쳐진 Markdown 내용
-            "total_pages": total_pages,
-            "successful_pages": successful_pages,
-            "failed_pages": gpt_processing_result.get("failed_pages", []),
-            "success_yn": success_yn,  # 페이지 처리 성공 여부
             "prompt_type": metadata.get("prompt_type", "default"),
             "status": "processed",
-            "updated_at": datetime.now()
+            **common_structure  # 공통 구조 병합
         }
         
         # stock_code가 있으면 upsert, 없으면 일반 insert
@@ -90,14 +99,8 @@ class MongoDBService:
             log.warning("MongoDB가 연결되지 않아 문서를 저장할 수 없습니다.")
             return "mock_document_id"
         
-        # 페이지별 결과를 합쳐서 하나의 Markdown으로 만들기
-        page_results = gpt_result.get("page_results", [])
-        combined_markdown = combine_page_results(page_results)
-        
-        # 페이지 처리 결과 확인
-        total_pages = gpt_result.get("total_pages", 0)
-        successful_pages = gpt_result.get("successful_pages", 0)
-        success_yn = "Y" if total_pages == successful_pages else "N"
+        # 공통 문서 구조 생성
+        common_structure = self._create_document_structure(gpt_result)
         
         # 깔끔한 문서 구조
         document = {
@@ -107,13 +110,8 @@ class MongoDBService:
             "file_size": pdf_metadata.get("file_size", 0),
             "content_type": pdf_metadata.get("content_type", "application/pdf"),
             "download_time": pdf_metadata.get("download_time", datetime.now()),
-            "parsed_content": combined_markdown,  # 합쳐진 Markdown 내용
-            "total_pages": total_pages,
-            "successful_pages": successful_pages,
-            "failed_pages": gpt_result.get("failed_pages", []),
-            "success_yn": success_yn,  # 페이지 처리 성공 여부
             "status": "completed",
-            "updated_at": datetime.now()
+            **common_structure  # 공통 구조 병합
         }
         
         # stock_code 기준으로 upsert (기존 문서가 있으면 업데이트, 없으면 삽입)
@@ -190,17 +188,10 @@ class MongoDBService:
     
     async def delete_document(self, document_id: str) -> bool:
         """문서 삭제"""
-        # 먼저 문서 정보 조회
-        document = await self.get_pdf_document(document_id)
-        if not document:
-            return False
-        
-        # 파일 관련 정리 (GridFS 사용하지 않음)
-        
-        # 문서 삭제
         collection = await self._get_collection()
         if collection is None:
             return False
+        
         result = await collection.delete_one({"_id": ObjectId(document_id)})
         return result.deleted_count > 0
     
@@ -233,11 +224,13 @@ class MongoDBService:
             docs.sort(key=lambda x: x["updated_at"], reverse=True)
             docs_to_remove = docs[1:]  # 첫 번째(최신) 제외한 나머지
             
-            for doc in docs_to_remove:
-                await collection.delete_one({"_id": doc["id"]})
-                total_removed += 1
-            
-            log.info(f"종목코드 {stock_code}: {len(docs_to_remove)}개 중복 문서 삭제")
+            if docs_to_remove:
+                # 배치 삭제로 성능 최적화
+                ids_to_remove = [doc["id"] for doc in docs_to_remove]
+                result = await collection.delete_many({"_id": {"$in": ids_to_remove}})
+                total_removed += result.deleted_count
+                
+                log.info(f"종목코드 {stock_code}: {result.deleted_count}개 중복 문서 삭제")
         
         return {
             "duplicate_stock_codes": len(duplicates),

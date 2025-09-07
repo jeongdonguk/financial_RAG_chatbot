@@ -557,8 +557,8 @@ class LangChainEmbeddingService:
             # 6. 청크에 청크 넘버 추가
             split_docs = self.add_chunk_numbers(split_docs, stock_code)
             
-            # 7. 벡터 스토어에 추가
-            success = await self.add_documents_to_vectorstore(split_docs)
+            # 7. 벡터 스토어에 추가 (중복 제거 불필요 - 이미 기존 데이터 삭제됨)
+            success = await self.add_documents_to_vectorstore(split_docs, deduplicate=False)
             if not success:
                 return {
                     "success": False,

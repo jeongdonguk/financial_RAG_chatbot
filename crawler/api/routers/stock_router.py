@@ -1,7 +1,6 @@
-from fastapi import APIRouter, HTTPException, Query, Path, Body
+from fastapi import APIRouter, HTTPException, Query, Path
 from typing import Optional, Dict, Any
 from datetime import datetime
-import os
 from service.pdf_service import pdf_service
 from service.mongodb_service import mongodb_service
 from service.prompt_service import prompt_service
@@ -113,22 +112,16 @@ async def get_stock_documents(
         BaseResponse[Dict]: 문서 목록
     """
     try:
-        # 종목별 문서 조회
-        filter_query = {"stock_code": stock_code}
-        cursor = mongodb_service.collection.find(filter_query).skip(skip).limit(limit).sort("created_at", -1)
-        documents = await cursor.to_list(length=limit)
+        # 종목별 문서 조회 (서비스 메서드 사용)
+        documents = await mongodb_service.list_pdf_documents(skip, limit, status=None)
         
-        # 전체 문서 수 조회
-        total_count = await mongodb_service.collection.count_documents(filter_query)
-        
-        # ObjectId를 문자열로 변환
-        for doc in documents:
-            doc["_id"] = str(doc["_id"])
+        # stock_code 필터링
+        filtered_documents = [doc for doc in documents if doc.get("stock_code") == stock_code]
         
         response_data = {
             "stock_code": stock_code,
-            "documents": documents,
-            "total_count": total_count,
+            "documents": filtered_documents,
+            "total_count": len(filtered_documents),
             "skip": skip,
             "limit": limit
         }
@@ -162,20 +155,14 @@ async def get_stock_document(
         BaseResponse[Dict]: 문서 정보
     """
     try:
-        from bson import ObjectId
+        # 서비스 메서드 사용
+        document = await mongodb_service.get_pdf_document(document_id)
         
-        document = await mongodb_service.collection.find_one({
-            "_id": ObjectId(document_id),
-            "stock_code": stock_code
-        })
-        
-        if not document:
+        if not document or document.get("stock_code") != stock_code:
             raise HTTPException(
                 status_code=404,
                 detail="해당 문서를 찾을 수 없습니다"
             )
-        
-        document["_id"] = str(document["_id"])
         
         return BaseResponse(
             success=True,
@@ -208,29 +195,19 @@ async def delete_stock_document(
         BaseResponse[Dict]: 삭제 결과
     """
     try:
-        from bson import ObjectId
-        
         # 문서 조회
-        document = await mongodb_service.collection.find_one({
-            "_id": ObjectId(document_id),
-            "stock_code": stock_code
-        })
+        document = await mongodb_service.get_pdf_document(document_id)
         
-        if not document:
+        if not document or document.get("stock_code") != stock_code:
             raise HTTPException(
                 status_code=404,
                 detail="해당 문서를 찾을 수 없습니다"
             )
         
-        # 파일 관련 정리 (GridFS 사용하지 않음)
+        # 서비스 메서드 사용
+        success = await mongodb_service.delete_document(document_id)
         
-        # 문서 삭제
-        result = await mongodb_service.collection.delete_one({
-            "_id": ObjectId(document_id),
-            "stock_code": stock_code
-        })
-        
-        if result.deleted_count == 0:
+        if not success:
             raise HTTPException(
                 status_code=404,
                 detail="문서 삭제에 실패했습니다"
