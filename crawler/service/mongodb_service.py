@@ -35,6 +35,11 @@ class MongoDBService:
         page_results = gpt_processing_result.get("page_results", [])
         combined_markdown = combine_page_results(page_results)
         
+        # 페이지 처리 결과 확인
+        total_pages = gpt_processing_result.get("total_pages", 0)
+        successful_pages = gpt_processing_result.get("successful_pages", 0)
+        success_yn = "Y" if total_pages == successful_pages else "N"
+        
         # 깔끔한 문서 구조
         document = {
             "filename": pdf_data["filename"],
@@ -44,9 +49,10 @@ class MongoDBService:
             "download_time": pdf_data["download_time"],
             "stock_code": pdf_data.get("stock_code"),
             "parsed_content": combined_markdown,  # 합쳐진 Markdown 내용
-            "total_pages": gpt_processing_result.get("total_pages", 0),
-            "successful_pages": gpt_processing_result.get("successful_pages", 0),
+            "total_pages": total_pages,
+            "successful_pages": successful_pages,
             "failed_pages": gpt_processing_result.get("failed_pages", []),
+            "success_yn": success_yn,  # 페이지 처리 성공 여부
             "prompt_type": metadata.get("prompt_type", "default"),
             "status": "processed",
             "updated_at": datetime.now()
@@ -88,6 +94,11 @@ class MongoDBService:
         page_results = gpt_result.get("page_results", [])
         combined_markdown = combine_page_results(page_results)
         
+        # 페이지 처리 결과 확인
+        total_pages = gpt_result.get("total_pages", 0)
+        successful_pages = gpt_result.get("successful_pages", 0)
+        success_yn = "Y" if total_pages == successful_pages else "N"
+        
         # 깔끔한 문서 구조
         document = {
             "stock_code": stock_code,
@@ -97,9 +108,10 @@ class MongoDBService:
             "content_type": pdf_metadata.get("content_type", "application/pdf"),
             "download_time": pdf_metadata.get("download_time", datetime.now()),
             "parsed_content": combined_markdown,  # 합쳐진 Markdown 내용
-            "total_pages": gpt_result.get("total_pages", 0),
-            "successful_pages": gpt_result.get("successful_pages", 0),
+            "total_pages": total_pages,
+            "successful_pages": successful_pages,
             "failed_pages": gpt_result.get("failed_pages", []),
+            "success_yn": success_yn,  # 페이지 처리 성공 여부
             "status": "completed",
             "updated_at": datetime.now()
         }
@@ -242,6 +254,7 @@ class MongoDBService:
         if document:
             document["_id"] = str(document["_id"])
         return document
+    
 
 # 서비스 인스턴스
 mongodb_service = MongoDBService()
